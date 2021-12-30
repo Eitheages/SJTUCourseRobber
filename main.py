@@ -14,6 +14,7 @@ if __name__ == "__main__":
         robber = chrome.CourseRobber(capabilities, My.account, My.password)
         robber.login(cookies=My.cookies)
         robber.jump()
-        robber.rob_coures(Courses.content)
-    except ProcessShutException and ProcessWrongException:
-        pass
+        e = robber.locate(Course("(2021-2022-2)-EN356-1", "任选课程"))
+        robber.check(e)
+    except Exception as e:
+        print(e)
