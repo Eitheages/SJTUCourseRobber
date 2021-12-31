@@ -4,10 +4,6 @@ from selenium.webdriver.remote.webelement import WebElement
 class ClassFull(Exception):
     """When a course is full, raise it."""
 
-class ProcessWrongException(Exception):
-    """When the script is working with wrong process, raise it."""
-    pass
-
 class ProcessShutException(Exception):
     """When it is necessary to end up the script, raise it."""
     pass
@@ -18,4 +14,8 @@ class TimeConflict(Exception):
 
 class CourseConflict(Exception):
     """When alert box show "一门课程最多可选1个志愿！", raise it."""
+    pass
+
+class AlreadyChoose(Exception):
+    """When alert box show "您确定要退掉该课程吗？", raise it."""
     pass

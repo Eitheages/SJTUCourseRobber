@@ -104,7 +104,7 @@ class CourseRobber():
 
             # jump to the new page
             self._brower.switch_to.window(self._brower.window_handles[-1])
-            WebDriverWait(self._brower,timeout=10).until(lambda d: d.title=="自主选课")
+            WebDriverWait(self._brower,timeout=10).until(EC.title_is("自主选课"))
             self.cat("进入自主选课界面")
         except NoSuchElementException:
             self.cat("错误日志：因没有找到关键元素，程序终止")
@@ -173,7 +173,7 @@ class CourseRobber():
         except KeyError:
             self.cat("错误日志：无法找到对应课程类别，请检查是否输入有误！")
             raise ProcessShutException
-        WebDriverWait(self._brower, timeout=5).until(lambda d: d.find_element(By.XPATH, "//*[@class=\"expand_close close1\"]"))
+        WebDriverWait(self._brower, timeout=20).until(lambda d: d.find_element(By.XPATH, "//*[@class=\"expand_close close1\"]"))
         try:
             rele: WebElement = self._brower.find_element(By.XPATH,"//*[@id=\"contentBox\"]/div[2]/div[1]")
         except TimeoutException:
@@ -194,21 +194,8 @@ class CourseRobber():
         self.cat("定位到课程{id}：{name} {teacher} {class_time} {status}".format(id=course.id_, name = name, teacher = teacher, class_time = class_time, status = status))
         return rdict
 
-    def check_alert(self) -> None:
-        """
-        Check if there is an alert box.
-        Do nothing when there is no; close it when there is.
-        """
-        try:
-            alert_close = self._brower.find_element(By.XPATH, "//*[@id=\"alertModal\"]/div/div/div[1]/button")
-            alert_close.click()
-            raise ClassFull
-        except NoSuchElementException:
-            pass
-
     def check(self, info: dict):
         if info["status"].split('/')[0] == info["status"].split('/')[1]:
-            self.cat("选课失败：人数已满！")
             raise ClassFull
         info["button"].click()
         try:
@@ -217,85 +204,41 @@ class CourseRobber():
             alert_close = alert_box.find_element(By.XPATH, ".//button")
             alert_close.click()
             if "冲突" in alert_info:
-                self.cat("选课失败：时间冲突！")
-                raise TimeoutException
-            elif "志愿" in alert_info:
-                self.cat("选课失败：已有选择！")
+                raise TimeConflict
+            elif "志愿" in alert_info:  
                 raise CourseConflict
+            elif "退掉" in alert_info:
+                raise AlreadyChoose
             else:
                 raise ClassFull
         except NoSuchElementException:
             pass
 
-    def rob_course(self, keyword: str, class_: str = "主修课程", pause_time: ... = 0.3) -> str:
-        '''
-        Input what you want to search in the box, try to choose that.
-        Remember to put in the type of course(default: "主修课程") that you want to choose simultaneously.
-        Try to make sure the keyword refer to a single class.
-        if there're no exceptions, 'button_list' will contain:
-            主修课程
-            民族生课程
-            留学生及港澳台生
-            板块课(大学英语)
-            板块课(体育（2）)
-            通识课
-            新生研讨课
-            通选课
-            点此查看更多
-        The last one is also important as it provides an opportunity to expand the incomplete list.
-        '''
-        if self._brower.title != "自主选课":
-            self.cat("错误日志：未进入自主选课页面！")
-            raise ProcessShutException
+    def rob_course(self, course: Course) -> dict:
+        """Try to rob course."""
+        course_info = None
         try:
-            button_list = self._brower.find_elements(By.XPATH, "//a[@href=\"javascript:void(0)\"]")
-            for button in button_list:
-                if class_ in button.text:
-                    button.click()
-                    break
-            # This break is essentially important!!!(Don't ask how I know.)
-            time.sleep(pause_time)
-            input_box = WebDriverWait(self._brower, timeout=5, poll_frequency=0.1).until(
-                lambda d: d.find_element(By.XPATH, "/html/body/div[1]/div/div/div[2]/div/div[1]/div/div/div/div/input")
-            )
-            input_box.clear()
-            input_box.send_keys(keyword)
-            chaxun = self._brower.find_element(By.XPATH, "//*[@id=\"searchBox\"]/div/div[1]/div/div/div/div/span/button[1]")
-            chaxun.click()
-            time.sleep(pause_time)
-            waiting = self._brower.find_element(By.XPATH,"//tr[@class=\"body_tr\"]")
-            waiting.find_element(By.TAG_NAME, "button").click()
-            try:
-                self.check_alert()
-            except ClassFull:
-                return "课程人数已满，选课失败！"
-            return "选课成功！"
-        except NoSuchElementException:
-            return "因为未找到关键元素，选课失败！"
+            self.check(course_info := self.locate(course))
+            self.cat("选课成功！")
+        except ClassFull:
+            self.cat("选课失败：人数已满！")
+        except CourseConflict:
+            self.cat("选课失败：志愿冲突！")
+        except TimeConflict:
+            self.cat("选课失败：时间冲突！")
+        except AlreadyChoose:
+            self.cat("选课失败：已经选择！")
+        return course_info
 
-    def rob_coures(self, courses: List[List[str]]) -> None:
-        '''
-        Input a dict include the courses, try to rob the course.
-        courses list should be like this:[
-            ["class_", "keyword",]
-            ...
-        ]where 'class_' means the type(no default), 'keyword' means the word you want to search.
-        '''
-        i = 1
-        for course in courses:
-            info = "第{}条课程:".format(i)
-            i += 1
-            try:
-                info += self.rob_course(keyword=course[1], class_=course[0])
-                self.cat(info)
-            except ProcessShutException as e:
-                raise e
+    def rob_courses(self, courses: List[Course]) -> None:
+        try:
+            for course in courses:
+                self.rob_course(course)
+        except ProcessShutException:
+            return
 
     def quit(self) -> None:
         self._brower.quit()
-        self.__file.close()
     
     def __del__(self) -> None:
         self.__file.close()
-
-

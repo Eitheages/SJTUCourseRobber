@@ -14,7 +14,6 @@ if __name__ == "__main__":
         robber = chrome.CourseRobber(capabilities, My.account, My.password)
         robber.login(cookies=My.cookies)
         robber.jump()
-        e = robber.locate(Course("(2021-2022-2)-EN356-1", "任选课程"))
-        robber.check(e)
+        robber.rob_courses(Desire.rob_list)
     except Exception as e:
         print(e)
