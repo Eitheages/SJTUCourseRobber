@@ -1,5 +1,4 @@
 # -*- coding:utf-8 -*-
-import re
 import time
 from . import nowtime
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
@@ -50,6 +49,7 @@ class CourseRobber():
         if "上海交通大学教学信息服务网" not in self.enter(r"https://i.sjtu.edu.cn/"):
             self.cat("错误日志：未进入上海交通大学教学信息服务网")
             raise ProcessShutException
+        self._brower.maximize_window()
         if cookies is not None:
             for cookie in cookies:
                 self._brower.add_cookie(cookie_dict=cookie)
@@ -154,9 +154,10 @@ class CourseRobber():
         }
         return rdict
 
-    def locate(self, course: Course) -> dict:
+    def locate(self, course: Course, message = True) -> dict:
         """
         Locate the certain course by searching.
+        Including exception check: title_is
         """
         # Considering whether to delete this exception check
         if self._brower.title != "自主选课":
@@ -173,12 +174,12 @@ class CourseRobber():
         except KeyError:
             self.cat("错误日志：无法找到对应课程类别，请检查是否输入有误！")
             raise ProcessShutException
-        WebDriverWait(self._brower, timeout=20).until(lambda d: d.find_element(By.XPATH, "//*[@class=\"expand_close close1\"]"))
         try:
-            rele: WebElement = self._brower.find_element(By.XPATH,"//*[@id=\"contentBox\"]/div[2]/div[1]")
+            WebDriverWait(self._brower, timeout=20).until(lambda d: d.find_element(By.XPATH, "//*[@class=\"expand_close close1\"]"))
         except TimeoutException:
             self.cat("错误日志：无法根据课程号找到对应课程，请检查是否输入有误！")
             raise ProcessShutException
+        rele: WebElement = self._brower.find_element(By.XPATH,"//*[@id=\"contentBox\"]/div[2]/div[1]")
         name = rele.find_element(By.XPATH, ".//h3[@class=\"panel-title\"]").find_element(By.XPATH, ".//a[@href=\"javascript:void(0);\"]").get_attribute('textContent')
         teacher = rele.find_element(By.XPATH, ".//td[@class= \"jsxmzc\"]").find_element(By.XPATH, ".//a[@href=\"javascript:void(0);\"]").get_attribute('textContent')
         class_time = rele.find_element(By.XPATH, ".//td[@class= \"sksj\"]").text.replace('\n', ' ')
@@ -191,10 +192,11 @@ class CourseRobber():
             "status": status,
             "button": button,
         }
-        self.cat("定位到课程{id}：{name} {teacher} {class_time} {status}".format(id=course.id_, name = name, teacher = teacher, class_time = class_time, status = status))
+        if message:
+            self.cat("定位到课程{id}：{name} {teacher} {class_time} {status}".format(id=course.id_, name = name, teacher = teacher, class_time = class_time, status = status))
         return rdict
 
-    def check(self, info: dict):
+    def _check(self, info: dict):
         if info["status"].split('/')[0] == info["status"].split('/')[1]:
             raise ClassFull
         info["button"].click()
@@ -210,15 +212,33 @@ class CourseRobber():
             elif "退掉" in alert_info:
                 raise AlreadyChoose
             else:
+                # Normally, this line is not necessary.s
                 raise ClassFull
         except NoSuchElementException:
+            """no alert, rob successfully."""
             pass
 
-    def rob_course(self, course: Course) -> dict:
-        """Try to rob course."""
-        course_info = None
+    def _cancel(self, course: Course):
+        info = self.locate(course)
+        if info["button"].get_attribute("textContent") == "选课":
+            self.cat("无法退课：未选上该课程！")
+            raise NotChosen
+        elif info["button"].get_attribute("textContent") == "退选":
+            info["button"].click()
         try:
-            self.check(course_info := self.locate(course))
+            alert_box: WebElement = self._brower.find_element(By.XPATH, "//*[@class=\"modal-content\"]")
+            alert_close: list = alert_box.find_elements(By.XPATH, ".//button")
+            alert_close[1].click()
+            self.cat("退课成功！")
+        except NoSuchElementException:
+            self.cat("错误日志：意外错误！")
+            raise ProcessShutException
+
+    def rob_course(self, course: Course) -> None:
+        """Try to rob course."""
+
+        try:
+            self._check(self.locate(course))
             self.cat("选课成功！")
         except ClassFull:
             self.cat("选课失败：人数已满！")
@@ -228,14 +248,66 @@ class CourseRobber():
             self.cat("选课失败：时间冲突！")
         except AlreadyChoose:
             self.cat("选课失败：已经选择！")
-        return course_info
+
 
     def rob_courses(self, courses: List[Course]) -> None:
+        for course in courses:
+            self.rob_course(course)
+
+    def change_courses(self, course_desired: Course, courses_cancel: List[Course] = None) -> None:
+        """
+        Cancel a series of course, then try to choose the course.
+        Before choose, firstly check if the course is full.
+
+        !!Attention: The action is extremely dangerous, as you may lose many courses
+        and receive a failure while robbing the desired courese.
+        """
+        if courses_cancel is not None:
+            coure_desired_status = self.locate(course_desired)["status"]
+            if coure_desired_status.split('/')[0] == coure_desired_status.split('/')[1]:
+                self.cat("选课失败：人数已满！")
+                return
+            for course in courses_cancel:
+                try:
+                    self._cancel(course)
+                except NotChosen:
+                    continue
+        self.rob_course(course_desired)
+        
+    def pick(self, course, pause_time: float = 1.0, timeout: float = 10) -> None:
         try:
-            for course in courses:
-                self.rob_course(course)
-        except ProcessShutException:
+            self._check(self.locate(course))
+            self.cat("无须捡漏，抢课成功！")
+        except ClassFull:
+            pass
+        except CourseConflict:
+            self.cat("选课失败：志愿冲突！")
             return
+        except TimeConflict:
+            self.cat("选课失败：时间冲突！")
+            return
+        except AlreadyChoose:
+            self.cat("选课失败：已经选择！")
+            return
+        
+        self.cat("开始以间隔{}秒一次的速度持续捡漏...".format(pause_time))
+        end_time = time.time() + timeout
+        
+        while time.time() <= end_time:
+            info = self.locate(course, message=False)
+            course_status = info["status"]
+            if course_status.split('/')[0] == course_status.split('/')[1]:
+                time.sleep(pause_time)
+                continue
+            else:
+                try:
+                    self._check(info)
+                    self.cat("捡漏成功！")
+                    return
+                except ClassFull:
+                    continue
+        self.cat("超出设定时间，捡漏停止！")
+        
 
     def quit(self) -> None:
         self._brower.quit()

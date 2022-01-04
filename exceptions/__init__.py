@@ -1,11 +1,10 @@
-from selenium.common.exceptions import WebDriverException
-from selenium.webdriver.remote.webelement import WebElement
-
 class ClassFull(Exception):
     """When a course is full, raise it."""
 
 class ProcessShutException(Exception):
-    """When it is necessary to end up the script, raise it."""
+    """When it is necessary to end up the script, raise it.
+    This is the only exception that cannot be dealt in code!
+    """
     pass
 
 class TimeConflict(Exception):
@@ -18,4 +17,8 @@ class CourseConflict(Exception):
 
 class AlreadyChoose(Exception):
     """When alert box show "您确定要退掉该课程吗？", raise it."""
+    pass
+
+class NotChosen(Exception):
+    """When you want to quit a course you have not choose, raise it."""
     pass

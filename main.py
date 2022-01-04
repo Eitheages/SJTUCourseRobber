@@ -1,5 +1,5 @@
-from packs.secret import *
-from common.setup import *
+from packs.secret import My, Desire
+from common.setup import get_capabilities
 from exceptions import *
 from browers import chrome
 
@@ -15,5 +15,8 @@ if __name__ == "__main__":
         robber.login(cookies=My.cookies)
         robber.jump()
         robber.rob_courses(Desire.rob_list)
+        # robber.pick(Course("(2021-2022-2)-FL3201-47", "板块课(大学英语)"))
+    except ProcessShutException:
+        pass
     except Exception as e:
-        print(e)
+        raise e
