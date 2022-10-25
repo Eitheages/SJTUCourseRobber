@@ -43,7 +43,7 @@
             {'name': 'kc@i.sjtu.edu.cn', 'value': 'ffff...'}, # 一般不变
             {'name': 'JSESSIONID', 'value': 'CF837...'}, # 会变
         ]
-    
+
     class Courses():
         rob_list = [
             """写入你想要选的课程。格式如下："""
@@ -51,5 +51,5 @@
             # Course("(2021-2022-2)-PHY1251-11") # 默认为主修课程
         ]
     ```
-    
+
     安装对应的库（主要是selenium），运行main.py。尽情享受吧！
